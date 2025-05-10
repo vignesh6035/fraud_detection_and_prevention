@@ -1,0 +1,315 @@
+import numpy as np # linear algebra
+import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
+import matplotlib.pyplot as plt
+import os
+import zipfile
+from sklearn.metrics import accuracy_score # Import accuracy_score
+import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import classification_report, confusion_matrix
+
+
+# Specify the path to your zip file
+zip_file_path = ("/content/creditcard.csv (1).zip")
+
+# Open the zip file
+with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+    # Get a list of all files and directories in the zip file
+    file_list = zip_ref.namelist()
+
+    # Print the list of files and directories
+    print(file_list)
+df = pd.read_csv("/content/creditcard.csv (1).zip")
+
+df
+df.columns
+#Check and visulaize Fraud to Non-fraud ratio
+#Explore the features avaliable in our dataframe
+df.shape
+df.info()
+df.head()
+df.describe()
+print(df.Amount.describe())
+
+# Count the occurrences of fraud and no fraud cases
+fnf = df["Class"].value_counts()
+
+# Print the ratio of fraud cases
+print(fnf/len(df))
+
+# Plottingg your data
+plt.xlabel("Class")
+plt.ylabel("Number of Observations")
+fnf.plot(kind = 'bar',title = 'Frequency by observation number',rot=0)
+# Plot how fraud and non-fraud cases are scattered
+plt.scatter(df.loc[df['Class'] == 0]['V1'], df.loc[df['Class'] == 0]['V2'], label="Class #0", alpha=0.5, linewidth=0.15)
+plt.scatter(df.loc[df['Class'] == 1]['V1'], df.loc[df['Class'] == 1]['V2'], label="Class #1", alpha=0.5, linewidth=0.15,c='r')
+plt.show()
+#Distribution of 2 Features : Time and Amount
+import seaborn as sns
+
+fig, ax = plt.subplots(1, 2, figsize=(18,4))
+
+# Plot the distribution of 'Time' feature
+sns.distplot(df['Time'].values/(60*60), ax=ax[0], color='r')
+ax[0].set_title('Distribution of Transaction Time', fontsize=14)
+ax[0].set_xlim([min(df['Time'].values/(60*60)), max(df['Time'].values/(60*60))])
+
+sns.distplot(df['Amount'].values, ax=ax[1], color='b')
+ax[1].set_title('Distribution of Transaction Amount', fontsize=14)
+ax[1].set_xlim([min(df['Amount'].values), max(df['Amount'].values)])
+
+plt.show()
+#Cut Up the Dataset into Two Datasets and Summarize
+# Seperate total data into non-fraud and fraud cases
+df_nonfraud = df[df.Class == 0] #save non-fraud df observations into a separate df
+df_fraud = df[df.Class == 1] #do the same for frauds
+#Compare the Amount of transactions in two separate datasets
+# Summarize statistics and see differences between fraud and normal transactions
+print(df_nonfraud.Amount.describe())
+print('_'*25)
+print(df_fraud.Amount.describe())
+
+# Import the module
+from scipy import stats
+F, p = stats.f_oneway(df['Amount'][df['Class'] == 0], df['Amount'][df['Class'] == 1])
+print("F:", F)
+print("p:",p)
+Transaction Amount Visualization
+# Plot of high value transactions($200-$2000)
+bins = np.linspace(200, 2000, 100)
+# Replace 'normed' with 'density' for both histogram plots
+plt.hist(df_nonfraud.Amount, bins, alpha=1, density=True, label='Non-Fraud')
+plt.hist(df_fraud.Amount, bins, alpha=1, density=True, label='Fraud')
+plt.legend(loc='upper right')
+plt.title("Amount by percentage of transactions (transactions \$200-$2000)")
+plt.xlabel("Transaction amount (USD)")
+plt.ylabel("Percentage of transactions (%)")
+plt.show()
+Transaction Hour
+# Plot of transactions in 48 hours
+bins = np.linspace(0, 48, 48) #48 hours
+# Replace 'normed' with 'density' for both histogram plots
+plt.hist((df_nonfraud.Time/(60*60)), bins, alpha=1, density=True, label='Non-Fraud')
+plt.hist((df_fraud.Time/(60*60)), bins, alpha=0.6, density=True, label='Fraud')
+plt.legend(loc='upper right')
+plt.title("Percentage of transactions by hour")
+plt.xlabel("Transaction time from first transaction in the dataset (hours)")
+plt.ylabel("Percentage of transactions (%)")
+plt.show()
+Feature Scaling
+# Select only numeric columns for scaling
+numeric_columns = ['Time', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'V10',
+       'V11', 'V12', 'V13', 'V14', 'V15', 'V16', 'V17', 'V18', 'V19', 'V20',
+       'V21', 'V22', 'V23', 'V24', 'V25', 'V26', 'V27', 'V28', 'Amount',
+       'Class']
+ # Add other numeric columns if present
+scaler = StandardScaler()
+# Scale the numeric columns
+df[numeric_columns] = scaler.fit_transform(df[numeric_columns])
+# Show the result
+#print(df.head())
+df
+# Scale "Time" and "Amount"
+from sklearn.preprocessing import StandardScaler, RobustScaler
+df['scaled_amount'] = RobustScaler().fit_transform(df['Amount'].values.reshape(-1,1))
+df['scaled_time'] = RobustScaler().fit_transform(df['Time'].values.reshape(-1,1))
+
+# Make a new dataset named "df_scaled" dropping out original "Time" and "Amount"
+df_scaled = df.drop(['Time','Amount'],axis = 1,inplace=False)
+df_scaled.head()
+Correlation Matrices
+# Calculate pearson correlation coefficience
+corr = df_scaled.corr()
+
+# Plot heatmap of correlation
+f, ax = plt.subplots(1, 1, figsize=(4,4))
+sns.heatmap(corr, cmap='coolwarm_r', annot_kws={'size':20})
+ax.set_title("Imbalanced Correlation Matrix \n (don't use for reference)", fontsize=10)
+#Extract features from our scaled dataset "df_scaled"
+# Define the prep_data function to extrac features
+def prep_data(df):
+    X = df.drop(['Class'], axis=1, inplace=False)
+    X = np.array(X).astype(float)  # Change np.float to float
+    y = df[['Class']]
+    y = np.array(y).astype(float)  # Change np.float to float
+    return X, y
+
+# Create X and y from the prep_data function
+X, y = prep_data(df_scaled)
+Logistic Regression
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+
+# Create the training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=.3, random_state=0)
+
+# Fit a logistic regression model to our data
+model = LogisticRegression()
+model.fit(X_train, y_train)
+
+# Obtain model predictions
+y_predicted = model.predict(X_test)
+Model Evaluation
+from sklearn.metrics import roc_curve,roc_auc_score, precision_recall_curve, average_precision_score
+from sklearn.metrics import classification_report
+from sklearn.metrics import confusion_matrix
+
+# Create true and false positive rates
+false_positive_rate, true_positive_rate, threshold = roc_curve(y_test, y_predicted)
+
+# Calculate Area Under the Receiver Operating Characteristic Curve
+probs = model.predict_proba(X_test)
+roc_auc = roc_auc_score(y_test, probs[:, 1])
+print('ROC AUC Score:',roc_auc)
+
+# Obtain precision and recall
+precision, recall, thresholds = precision_recall_curve(y_test, y_predicted)
+
+# Calculate average precision
+average_precision = average_precision_score(y_test, y_predicted)
+
+# Define a roc_curve function
+def plot_roc_curve(false_positive_rate,true_positive_rate,roc_auc):
+    plt.plot(false_positive_rate, true_positive_rate, linewidth=5, label='AUC = %0.3f'% roc_auc)
+    plt.plot([0,1],[0,1], linewidth=5)
+    plt.xlim([-0.01, 1])
+    plt.ylim([0, 1.01])
+    plt.legend(loc='upper right')
+    plt.title('Receiver operating characteristic curve (ROC)')
+    plt.ylabel('True Positive Rate')
+    plt.xlabel('False Positive Rate')
+    plt.show()
+
+# Define a precision_recall_curve function
+def plot_pr_curve(recall, precision, average_precision):
+    plt.step(recall, precision, color='b', alpha=0.2, where='post')
+    plt.fill_between(recall, precision, step='post', alpha=0.2, color='b')
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    plt.ylim([0.0, 1.05])
+    plt.xlim([0.0, 1.0])
+    plt.title('2-class Precision-Recall curve: AP={0:0.2f}'.format(average_precision))
+    plt.show()
+
+# Print the classifcation report and confusion matrix
+print('Classification report:\n', classification_report(y_test, y_predicted))
+print('Confusion matrix:\n',confusion_matrix(y_true = y_test, y_pred = y_predicted))
+
+# Plot the roc curve
+plot_roc_curve(false_positive_rate,true_positive_rate,roc_auc)
+
+# Plot recall precision curve
+plot_pr_curve(recall, precision, average_precision)
+Logistic Regression with Resampled Data
+
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from imblearn.under_sampling import RandomUnderSampler
+from imblearn.over_sampling import RandomOverSampler
+from imblearn.over_sampling import SMOTE
+from imblearn.over_sampling import BorderlineSMOTE
+
+# Create the training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=.3, random_state=0)
+
+# Resample your training data
+rus = RandomUnderSampler()
+ros = RandomOverSampler()
+# The 'kind' argument is deprecated, use 'sampling_strategy' instead for SMOTE
+smote = SMOTE(sampling_strategy='auto', random_state=5)
+# For BorderlineSMOTE, use 'kind' to specify the borderline method
+blsmote = BorderlineSMOTE(kind='borderline-2', random_state=5)
+
+X_train_rus, y_train_rus = rus.fit_resample(X_train,y_train)
+X_train_ros, y_train_ros = ros.fit_resample(X_train,y_train)
+X_train_smote, y_train_smote = smote.fit_resample(X_train,y_train)
+X_train_blsmote, y_train_blsmote = blsmote.fit_resample(X_train,y_train)
+
+# Fit a logistic regression model to our data
+rus_model = LogisticRegression().fit(X_train_rus, y_train_rus)
+ros_model = LogisticRegression().fit(X_train_ros, y_train_ros)
+smote_model = LogisticRegression().fit(X_train_smote, y_train_smote)
+blsmote_model = LogisticRegression().fit(X_train_blsmote, y_train_blsmote)
+
+y_rus = rus_model.predict(X_test)
+y_ros = ros_model.predict(X_test)
+y_smote = smote_model.predict(X_test)
+y_blsmote = blsmote_model.predict(X_test)
+
+print('Classifcation report:\n', classification_report(y_test, y_rus))
+print('Confusion matrix:\n', confusion_matrix(y_true = y_test, y_pred = y_rus))
+print('*'*25)
+
+print('Classifcation report:\n', classification_report(y_test, y_ros))
+print('Confusion matrix:\n', confusion_matrix(y_true = y_test, y_pred = y_ros))
+print('*'*25)
+
+print('Classifcation report:\n', classification_report(y_test, y_smote))
+print('Confusion matrix:\n', confusion_matrix(y_true = y_test, y_pred = y_smote))
+print('*'*25)
+
+print('Classifcation report:\n', classification_report(y_test, y_blsmote))
+print('Confusion matrix:\n', confusion_matrix(y_true = y_test, y_pred = y_blsmote))
+print('*'*25)
+#Load the dataset
+data = pd.read_csv("/content/creditcard.csv (1).zip")
+
+# Feature scaling for 'Amount'
+scaler = Standar dScaler()
+data['scaled_amount'] = scaler.fit_transform(data['Amount'].values.reshape(-1, 1))
+data.drop(['Amount', 'Time'], axis=1, inplace=True)
+
+# Define features and target
+X = data.drop("Class", axis=1)
+y = data["Class"]
+
+# Split into train and test sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=y, random_state=42)
+
+# Train the model
+model = RandomForestClassifier(n_estimators=100, random_state=42)
+model.fit(X_train, y_train)
+
+# Predict and evaluate
+y_pred = model.predict(X_test)
+print("Confusion Matrix:")
+print(confusion_matrix(y_test, y_pred))
+
+print("\nClassification Report:")
+print(classification_report(y_test, y_pred))
+
+# Example: Preventing a transaction if model detects fraud
+def is_transaction_fraudulent(transaction_data):
+    # Reshape Amount to a 2D array before scaling
+    amount = transaction_data['Amount']
+    transaction_data_scaled = scaler.transform([[amount]])
+
+    # Assuming 'features' contains a list of feature values in the correct order
+    input_data = transaction_data['features']
+
+    # Append the scaled amount to the input data
+    input_data.append(transaction_data_scaled[0][0])
+
+    # Reshape input_data to a 2D array before prediction
+    prediction = model.predict([input_data])
+
+    return prediction[0] == 1  # Returns True if fraud
+
+# Simulate a new transaction (dummy values for illustration)
+new_transaction = {
+    'features': [0] * (len(X.columns) -1),  # Replace with real values
+    'Amount': 1500
+}
+
+# Example prevention
+if is_transaction_fraudulent(new_transaction):
+    print("Transaction Blocked: Suspected Fraud.")
+else:
+    print("Transaction Approved.")
+#accuracy_score
+y_pred=model.predict(X_test) # Changed x_test to X_test
+accuracy=accuracy_score(y_test,y_pred)
+print(f"M0del Accuracy:{accuracy*100:.2f}%")
